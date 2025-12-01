@@ -1,0 +1,47 @@
+#include <Wire.h>
+#include <MPU6050.h>
+#include <SPI.h>
+#include <nRF24L01.h>
+#include <RF24.h>
+#include <SoftwareSerial.h>
+MPU6050 mpu;
+RF24 radio(9, 10); // CE, CSN
+SoftwareSerial BT(3, 4); // HC-05 TX -> D3, RX -> D4
+const byte address[6] = "00001";
+struct Data_Packet {
+  char command[10];
+} data;
+void setup() {
+  Serial.begin(9600);
+  BT.begin(9600);
+  Wire.begin();
+  mpu.initialize();
+  radio.begin();
+  radio.openWritingPipe(address);
+  radio.setPALevel(RF24_PA_MIN);
+  radio.stopListening();
+}
+void loop() {
+  int16_t ax, ay, az, gx, gy, gz;
+  mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+  // Gesture based command
+  if (ax > 10000) strcpy(data.command, "FORWARD");
+  else if (ax < -10000) strcpy(data.command, "BACKWARD");
+  else if (ay > 10000) strcpy(data.command, "RIGHT");
+  else if (ay < -10000) strcpy(data.command, "LEFT");
+  else strcpy(data.command, "STOP");
+  Serial.print("Gesture: ");
+  Serial.println(data.command);
+  radio.write(&data, sizeof(data));
+  delay(500);
+  // Voice command from HC-05
+  if (BT.available()) {
+    String voiceCommand = BT.readStringUntil('\n');
+    voiceCommand.trim();
+    voiceCommand.toUpperCase();
+    voiceCommand.toCharArray(data.command, 10);
+    Serial.print("Voice: ");
+    Serial.println(data.command);
+    radio.write(&data, sizeof(data));
+  }
+}
